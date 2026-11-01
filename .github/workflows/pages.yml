@@ -1,0 +1,55 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pages needs these to publish; nothing else is granted.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer push replaces a queued one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: subosito/flutter-action@v2.23.0
+        with:
+          channel: stable
+          flutter-version: 3.47.8
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+      # The site lives at https://simple-api-dev.github.io/notes-client/
+      # The demo key comes from the SIMPLEAPI_KEY repository variable (Settings,
+      # Secrets and variables, Actions, Variables). It is compiled into the
+      # public JavaScript, so use a free demo key. Unset builds an app the API refuses (401).
+      - run: >
+          flutter build web --release --base-href /notes-client/
+          --dart-define=SIMPLEAPI_KEY=${{ vars.SIMPLEAPI_KEY }}
+
+      - uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5.0.1
